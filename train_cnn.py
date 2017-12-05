@@ -11,6 +11,11 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.autograd as autograd
 
+parser = argparse.ArgumentParser(description='Train the CNN model.')
+parser.add_argument('--pooling', type=str, default="mean")
+parser.add_argument('--hidden_dims', type=int, default=128)
+args = parser.parse_args()
+
 class PoolingCNN(nn.Module):
     def __init__(self, input_size, hidden_size, pooling):
         super(PoolingCNN, self).__init__()
@@ -36,20 +41,24 @@ def load_cnn_dataset(mode):
 def max_margin_loss(positives, negatives):
     loss = 0.0
     for pos in positives:
+        maxNeg = negatives[0]
         for neg in negatives:
-            pairwise_loss = neg - pos + 0.2
-            if pairwise_loss.data[0] > 0.0:
-                loss += pairwise_loss
+            if neg.data[0] > maxNeg.data[0]:
+                maxNeg = neg
+        pairwise_loss = maxNeg - pos + 1.0
+        if pairwise_loss.data[0] > 0.0:
+            loss += pairwise_loss
     return loss / (len(positives) * len(negatives))
 
-encoder = PoolingCNN(200, 512, "mean")
-optimizer = optim.Adam(encoder.parameters(), lr=0.0001, weight_decay=0.01)
+encoder = PoolingCNN(200, args.hidden_size, args.pooling)
+optimizer = optim.Adam(encoder.parameters(), lr=0.0001, weight_decay=1e-5)
 
-for epoch in range(10):
+for epoch in range(16):
     print("Epoch", epoch)
     
     i = 0
     for question, positives, negatives in tqdm(load_cnn_dataset("train")):
+        encoder.train(True)
         question = encoder(autograd.Variable(question, requires_grad=True))
         positives = encoder(autograd.Variable(positives, requires_grad=True))
         negatives = encoder(autograd.Variable(negatives, requires_grad=True))
@@ -70,6 +79,7 @@ for epoch in range(10):
 
         if i % 2048 == 0:
             print()
+            encoder.train(False)
             for mode in ["dev", "test", "android.dev", "android.test"]:
                 all_scores, all_expected = [], []
                 stats = {"loss": [], "mrr": [], "map": [], "p@1": [], "p@5": []}

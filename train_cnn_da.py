@@ -11,6 +11,11 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.autograd as autograd
 
+parser = argparse.ArgumentParser(description='Train the CNN model w/ domain adaptation.')
+parser.add_argument('--pooling', type=str, default="mean")
+parser.add_argument('--hidden_dims', type=int, default=128)
+args = parser.parse_args()
+
 class GradReverse(autograd.Function):
     def forward(self, x):
         return x
@@ -47,16 +52,18 @@ def load_cnn_dataset(mode, forever=False):
 def max_margin_loss(positives, negatives):
     loss = 0.0
     for pos in positives:
+        maxNeg = negatives[0]
         for neg in negatives:
-            pairwise_loss = neg - pos + 0.2
-            if pairwise_loss.data[0] > 0.0:
-                loss += pairwise_loss
+            if neg.data[0] > maxNeg.data[0]:
+                maxNeg = neg
+        pairwise_loss = maxNeg - pos + 1.0
+        if pairwise_loss.data[0] > 0.0:
+            loss += pairwise_loss
     return loss / (len(positives) * len(negatives))
 
-hidden_size = 128
-encoder = PoolingCNN(200, hidden_size, "mean")
+encoder = PoolingCNN(200, args.hidden_size, args.pooling)
 
-classifier = nn.Linear(hidden_size, 1)
+classifier = nn.Linear(args.hidden_size, 1)
 classifier_loss = nn.BCEWithLogitsLoss()
 
 optimizer = optim.Adam(list(encoder.parameters()) + list(classifier.parameters()))
