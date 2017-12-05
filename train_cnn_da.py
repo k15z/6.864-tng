@@ -1,3 +1,4 @@
+import argparse
 import json
 import meter
 import numpy as np
@@ -13,7 +14,8 @@ import torch.autograd as autograd
 
 parser = argparse.ArgumentParser(description='Train the CNN model w/ domain adaptation.')
 parser.add_argument('--pooling', type=str, default="mean")
-parser.add_argument('--hidden_dims', type=int, default=128)
+parser.add_argument('--hidden_size', type=int, default=128)
+parser.add_argument('--classifier_weight', type=float, default=0.1)
 args = parser.parse_args()
 
 class GradReverse(autograd.Function):
@@ -49,18 +51,6 @@ def load_cnn_dataset(mode, forever=False):
         if not forever: 
             done = True
 
-def max_margin_loss(positives, negatives):
-    loss = 0.0
-    for pos in positives:
-        maxNeg = negatives[0]
-        for neg in negatives:
-            if neg.data[0] > maxNeg.data[0]:
-                maxNeg = neg
-        pairwise_loss = maxNeg - pos + 1.0
-        if pairwise_loss.data[0] > 0.0:
-            loss += pairwise_loss
-    return loss / (len(positives) * len(negatives))
-
 encoder = PoolingCNN(200, args.hidden_size, args.pooling)
 
 classifier = nn.Linear(args.hidden_size, 1)
@@ -88,8 +78,9 @@ for epoch in range(10):
         negg = encoder(autograd.Variable(negg, requires_grad=True))
         loss += classifier_loss(GradReverse()(classifier(poss)), autograd.Variable(torch.Tensor(poss.size(0), 1).fill_(0.0))) / poss.size(0)
         loss += classifier_loss(GradReverse()(classifier(negg)), autograd.Variable(torch.Tensor(negg.size(0), 1).fill_(0.0))) / negg.size(0)
+        loss *= args.classifier_weight
         if type(loss) != type(0.0):
-            (loss * 0.1).backward(retain_graph=True)
+            loss.backward(retain_graph=True)
             if random() < 0.001:
                 print("classifier loss", loss.data[0])
 

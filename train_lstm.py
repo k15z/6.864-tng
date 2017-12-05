@@ -10,8 +10,6 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.autograd as autograd
 
-use_gpu = torch.cuda.is_available()
-
 class PoolingRNN(nn.Module):
     def __init__(self, input_size, hidden_size, pooling):
         super(PoolingRNN, self).__init__()
@@ -41,15 +39,6 @@ def load_cnn_dataset(mode, forever=False):
         dataset.append((question, positives, negatives))
     while forever:
         yield from dataset
-
-def max_margin_loss(positives, negatives):
-    loss = 0.0
-    for pos in positives:
-        for neg in negatives:
-            pairwise_loss = neg - pos + 0.2
-            if pairwise_loss.data[0] > 0.0:
-                loss += pairwise_loss
-    return loss / (len(positives) * len(negatives))
 
 encoder = PoolingRNN(200, 32, "mean")
 optimizer = optim.Adam(encoder.parameters())

@@ -109,6 +109,26 @@ class AUCMeter(Meter):
         return area / max_fpr
 
 def auroc(scores, expected):
+    print(scores, expected)
     meter = AUCMeter()
     meter.add(scores, expected)
     return meter.value(1.0), meter.value(0.05)
+
+if __name__ == '__main__':
+    # there's something wrong with this but the staff said to use it so ¯\_(ツ)_/¯
+    from sklearn.metrics import roc_auc_score
+
+    scores = np.array([0.9, 0.8, 0.7, 0.6, 0.5])
+    expected = np.array([1, 1, 1, 0, 0])
+
+    # standard sklearn implementation
+    print(roc_auc_score(expected, scores))
+
+    # standard sklearn implementation
+    print(roc_auc_score(expected, scores))
+
+    # meter implementation
+    meter = AUCMeter()
+    meter.add(scores, expected)
+    print(meter.value(max_fpr=1.0))
+    print(meter.value(max_fpr=0.05))

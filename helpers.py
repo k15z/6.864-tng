@@ -40,6 +40,29 @@ def load_dataset(mode):
             negatives = [vectorize(tokens(askubuntu_corpus[qid]), pad_to=pad_to) for qid in negids]
             yield question, positives, negatives, {}
 
+def normalize(input, p=2, dim=1, eps=1e-12):
+    r"""Performs :math:`L_p` normalization of inputs over specified dimension.
+
+    Does:
+
+    .. math::
+        v = \frac{v}{\max(\lVert v \rVert_p, \epsilon)}
+
+    for each subtensor v over dimension dim of input. Each subtensor is
+    flattened into a vector, i.e. :math:`\lVert v \rVert_p` is not a matrix
+    norm.
+
+    With default arguments normalizes over the second dimension with Euclidean
+    norm.
+
+    Args:
+        input: input tensor of any shape
+        p (float): the exponent value in the norm formulation. Default: 2
+        dim (int): the dimension to reduce. Default: 1
+        eps (float): small value to avoid division by zero. Default: 1e-12
+    """
+    return input / input.norm(p, dim, True).clamp(min=eps).expand_as(input)
+    
 def cosine_similarity(x1, x2, dim=1, eps=1e-8):
     r"""Returns cosine similarity between x1 and x2, computed along dim.
     .. math ::
@@ -113,11 +136,21 @@ def reciprocal_rank(scores, expected):
             return 1.0 / (i + 1.0)
     return 0.0
 
-def auroc_below_5(scores, expected):
+def auroc_at_fpr(scores, expected, max_fpr=0.05):
     fpr, tpr, thresholds = metrics.roc_curve(expected, scores)
     for i in range(fpr.shape[0]):
-        if fpr[i] > 0.05:
+        if fpr[i] > max_fpr:
             break
-    return metrics.auc(fpr, tpr), metrics.auc(fpr[:i], tpr[:i])
+    return metrics.auc(fpr[:i], tpr[:i])
 
-auroc_below_5([11, 0.5, -11, 10, 5, 2], [1, 0, 0, 1, 1, 1])
+def max_margin_loss(positives, negatives):
+    loss = 0.0
+    for pos in positives:
+        maxNeg = negatives[0]
+        for neg in negatives:
+            if neg.data[0] > maxNeg.data[0]:
+                maxNeg = neg
+        pairwise_loss = maxNeg - pos + 0.5
+        if pairwise_loss.data[0] > 0.0:
+            loss += pairwise_loss
+    return loss / (len(positives) * len(negatives))
