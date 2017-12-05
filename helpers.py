@@ -1,12 +1,11 @@
 import torch
+import random
 import numpy as np
 from sklearn import metrics
-from data import word2vec, askubuntu_label, askubuntu_corpus
+from data import word2vec, askubuntu_label, askubuntu_corpus, android_label, android_corpus
 
 ZEROS = [0.0] * 200
-MAX_TIMESTEPS = max([len(corpus["question"]) + len(corpus["body"]) for corpus in askubuntu_corpus.values()])
-
-def vectorize(tokens, embedding=word2vec, pad_to=MAX_TIMESTEPS):
+def vectorize(tokens, pad_to, embedding=word2vec):
     vectors = []
     for token in tokens:
         vectors.append(embedding[token] if token in embedding else ZEROS)
@@ -14,18 +13,32 @@ def vectorize(tokens, embedding=word2vec, pad_to=MAX_TIMESTEPS):
         vectors.insert(0, ZEROS)
     return vectors
 
-tokens = lambda x: x["question"] + x["body"]
+tokens = lambda x: x["question"]# + x["body"]
 def load_dataset(mode):
-    for sample in askubuntu_label[mode]:
-        pad_to = max(
-            [len(tokens(askubuntu_corpus[sample["qid"]]))] + 
-            [len(tokens(askubuntu_corpus[qid])) for qid in sample["pos_qids"]] + 
-            [len(tokens(askubuntu_corpus[qid])) for qid in sample["neg_qids"]]
-        )
-        question = vectorize(tokens(askubuntu_corpus[sample["qid"]]), pad_to=pad_to)
-        positives = [vectorize(tokens(askubuntu_corpus[qid]), pad_to=pad_to) for qid in sample["pos_qids"]]
-        negatives = [vectorize(tokens(askubuntu_corpus[qid]), pad_to=pad_to) for qid in sample["neg_qids"]]
-        yield question, positives, negatives, {}
+    if "android" in mode:
+        for sample in android_label[mode.replace("android.", "")]:
+            negids = sample["neg_qids"] if len(sample["neg_qids"]) < 20 else random.sample(sample["neg_qids"], 20)
+            pad_to = max(
+                [len(tokens(android_corpus[sample["qid"]]))] + 
+                [len(tokens(android_corpus[qid])) for qid in sample["pos_qids"]] + 
+                [len(tokens(android_corpus[qid])) for qid in negids]
+            )
+            question = vectorize(tokens(android_corpus[sample["qid"]]), pad_to=pad_to)
+            positives = [vectorize(tokens(android_corpus[qid]), pad_to=pad_to) for qid in sample["pos_qids"]]
+            negatives = [vectorize(tokens(android_corpus[qid]), pad_to=pad_to) for qid in negids]
+            yield question, positives, negatives, {}
+    else:
+        for sample in askubuntu_label[mode]:
+            negids = sample["neg_qids"] if len(sample["neg_qids"]) < 20 else random.sample(sample["neg_qids"], 20)
+            pad_to = max(
+                [len(tokens(askubuntu_corpus[sample["qid"]]))] + 
+                [len(tokens(askubuntu_corpus[qid])) for qid in sample["pos_qids"]] + 
+                [len(tokens(askubuntu_corpus[qid])) for qid in negids]
+            )
+            question = vectorize(tokens(askubuntu_corpus[sample["qid"]]), pad_to=pad_to)
+            positives = [vectorize(tokens(askubuntu_corpus[qid]), pad_to=pad_to) for qid in sample["pos_qids"]]
+            negatives = [vectorize(tokens(askubuntu_corpus[qid]), pad_to=pad_to) for qid in negids]
+            yield question, positives, negatives, {}
 
 def cosine_similarity(x1, x2, dim=1, eps=1e-8):
     r"""Returns cosine similarity between x1 and x2, computed along dim.
@@ -99,3 +112,12 @@ def reciprocal_rank(scores, expected):
         if target:
             return 1.0 / (i + 1.0)
     return 0.0
+
+def auroc_below_5(scores, expected):
+    fpr, tpr, thresholds = metrics.roc_curve(expected, scores)
+    for i in range(fpr.shape[0]):
+        if fpr[i] > 0.05:
+            break
+    return metrics.auc(fpr, tpr), metrics.auc(fpr[:i], tpr[:i])
+
+auroc_below_5([11, 0.5, -11, 10, 5, 2], [1, 0, 0, 1, 1, 1])
