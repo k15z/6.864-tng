@@ -51,7 +51,7 @@ def load_cnn_dataset(mode, forever=False):
         if not forever: 
             done = True
 
-encoder = PoolingCNN(200, args.hidden_size, args.pooling)
+encoder = PoolingCNN(300, args.hidden_size, args.pooling)
 
 classifier = nn.Linear(args.hidden_size, 1)
 classifier_loss = nn.BCEWithLogitsLoss()
@@ -59,7 +59,7 @@ classifier_loss = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(list(encoder.parameters()) + list(classifier.parameters()))
 
 android_dev_loader = load_cnn_dataset("android.dev", forever=True)
-for epoch in range(10):
+for epoch in range(32):
     print("Epoch", epoch)
     
     i = 0
@@ -92,6 +92,8 @@ for epoch in range(10):
             loss.backward()
             if random() < 0.001:
                 print("question retrieval loss", loss.data[0])
+                print("pos", list(map(lambda x: x.data[0], positives)))
+                print("neg", list(reversed(sorted(map(lambda x: x.data[0], negatives)))))
 
         i += 1
 
@@ -99,7 +101,7 @@ for epoch in range(10):
             optimizer.step()
             optimizer.zero_grad()
 
-        if i % 2048 == 0:
+        if i % 4096 == 0:
             print()
             for mode in ["dev", "test", "android.dev", "android.test"]:
                 all_scores, all_expected = [], []

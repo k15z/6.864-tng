@@ -21,7 +21,7 @@ def go():
         if len(log) > 0:
             df = pd.DataFrame(log)
             df = df.loc[df['mode'] == "dev"].reset_index()
-            ax = df.plot(x="index", ylim=(0.0, 1.0), title=logfile.replace(".log", ""))
+            ax = df.plot(x="index", ylim=(0.3, 1.25), title=logfile.replace(".log", ""))
             fig = ax.get_figure()
             fig.savefig(logfile.replace(".log", ".png"))
 

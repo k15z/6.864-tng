@@ -2,22 +2,29 @@ import torch
 import random
 import numpy as np
 from sklearn import metrics
-from data import word2vec, askubuntu_label, askubuntu_corpus, android_label, android_corpus
+from data import glovevec, word2vec, askubuntu_label, askubuntu_corpus, android_label, android_corpus
 
-ZEROS = [0.0] * 200
-def vectorize(tokens, pad_to, embedding=word2vec):
+MISS, HIT = 0, 0
+ZEROS = [0.0] * 300
+def vectorize(tokens, pad_to, embedding=glovevec):
+    global MISS, HIT
     vectors = []
     for token in tokens:
+        token = token.lower()
         vectors.append(embedding[token] if token in embedding else ZEROS)
+        if token not in embedding:
+            MISS += 1
+        else: HIT += 1
     while len(vectors) < pad_to:
         vectors.insert(0, ZEROS)
     return vectors
 
 tokens = lambda x: x["question"]# + x["body"]
 def load_dataset(mode):
+    # positives = batch_size * nb_words * embedding_dims
     if "android" in mode:
         for sample in android_label[mode.replace("android.", "")]:
-            negids = sample["neg_qids"] if len(sample["neg_qids"]) < 20 else random.sample(sample["neg_qids"], 20)
+            negids = sample["neg_qids"] if len(sample["neg_qids"]) < 20 or "train" not in mode else random.sample(sample["neg_qids"], 20)
             pad_to = max(
                 [len(tokens(android_corpus[sample["qid"]]))] + 
                 [len(tokens(android_corpus[qid])) for qid in sample["pos_qids"]] + 
@@ -29,7 +36,7 @@ def load_dataset(mode):
             yield question, positives, negatives, {}
     else:
         for sample in askubuntu_label[mode]:
-            negids = sample["neg_qids"] if len(sample["neg_qids"]) < 20 else random.sample(sample["neg_qids"], 20)
+            negids = sample["neg_qids"] if len(sample["neg_qids"]) < 20 or "train" not in mode else random.sample(sample["neg_qids"], 20)
             pad_to = max(
                 [len(tokens(askubuntu_corpus[sample["qid"]]))] + 
                 [len(tokens(askubuntu_corpus[qid])) for qid in sample["pos_qids"]] + 
@@ -108,10 +115,7 @@ def average_precision(scores, expected):
     scores - a list of rank scores
     expected - a list of 0 or 1
     """
-    total = 0.0
-    for k in range(len(scores)):
-        total += precision_at_k(scores, expected, k + 1) * expected[k]
-    return 0.0 if sum(expected) == 0.0 else total/sum(expected)
+    return metrics.average_precision_score(expected, scores)
 
 def precision_at_k(scores, expected, k):
     """
@@ -150,7 +154,7 @@ def max_margin_loss(positives, negatives):
         for neg in negatives:
             if neg.data[0] > maxNeg.data[0]:
                 maxNeg = neg
-        pairwise_loss = maxNeg - pos + 0.5
+        pairwise_loss = maxNeg - pos + 1.0
         if pairwise_loss.data[0] > 0.0:
             loss += pairwise_loss
-    return loss / (len(positives) * len(negatives))
+    return loss / len(positives) if len(positives) > 0 else loss

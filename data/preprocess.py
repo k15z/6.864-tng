@@ -21,13 +21,15 @@ def save(file, data):
     with open(file, "wb") as fout:
         pickle.dump(data, fout, protocol=pickle.HIGHEST_PROTOCOL)
 
+ALLTOKENS = set()
 def word_embedding(path):
     embedding = {}
     with gzip.open(path, "rt", encoding="utf8") as fin:
         for row in tqdm(map(lambda line: line.split(), fin), path):
             word, vec = row[0].lower(), list(map(float, row[1:]))
-            assert word not in embedding
-            embedding[word] = vec
+            if word in ALLTOKENS:
+                assert word not in embedding
+                embedding[word] = vec
     return embedding
 
 class AskUbuntu(object):
@@ -37,6 +39,7 @@ class AskUbuntu(object):
         with gzip.open("askubuntu/text_tokenized.txt.gz", "rt", encoding="utf8") as fin:
             for qid, question, body in tqdm(map(lambda line: line.split("\t"), fin)):
                 body_tokens = body.strip().split(" ")
+                ALLTOKENS.update(body_tokens)
                 askubuntu[int(qid)] = {
                     "question": question.split(" "),
                     "body": body_tokens if len(body_tokens) < 100 else body_tokens[:100]
@@ -66,6 +69,7 @@ class Android(object):
         with gzip.open("Android/corpus.tsv.gz", "rt", encoding="utf8") as fin:
             for qid, question, body in tqdm(map(lambda line: line.split("\t"), fin)):
                 body_tokens = body.strip().split(" ")
+                ALLTOKENS.update(body_tokens)
                 android[int(qid)] = {
                     "question": question.split(" "),
                     "body": body_tokens if len(body_tokens) < 100 else body_tokens[:100]
@@ -85,18 +89,18 @@ class Android(object):
         return [{**{"qid": k}, **v} for k, v in dataset.items()]
 
 """
-save("word2vec.pkl", word_embedding("askubuntu/vector/vectors_pruned.200.txt.gz"))
-
 save("askubuntu_label.pkl", {
     "dev": AskUbuntu.load_dataset("dev"),
     "test": AskUbuntu.load_dataset("test"),
     "train": AskUbuntu.load_dataset("train_random")
 })
-save("askubuntu_corpus.pkl", AskUbuntu.load_corpus())
-
 save("android_label.pkl", {
     "dev": Android.load_dataset("Android/dev.neg.txt", "Android/dev.pos.txt"),
     "test": Android.load_dataset("Android/test.neg.txt", "Android/test.pos.txt")
 })
-save("android_corpus.pkl", Android.load_corpus())
 """
+
+save("askubuntu_corpus.pkl", AskUbuntu.load_corpus())
+save("android_corpus.pkl", Android.load_corpus())
+save("glovevec.pkl", word_embedding("glove.42B.300d.txt.gz"))
+save("word2vec.pkl", word_embedding("askubuntu/vector/vectors_pruned.200.txt.gz"))
